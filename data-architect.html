@@ -1,0 +1,1494 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DATA ARCHITECT // תשתית מדידה הנדסית</title>
+
+<!-- Tailwind -->
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- Lucide Icons -->
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          blueprint: {
+            900: '#0A1F33',
+            800: '#102A43',
+            700: '#173559',
+            600: '#1E4072',
+            500: '#2A5285',
+            400: '#486FA8',
+            300: '#7FA0C9',
+            200: '#B8CCE0',
+            100: '#E2EAF3',
+          },
+          safety: {
+            DEFAULT: '#FF6B00',
+            light: '#FF8A33',
+            dark: '#CC5500',
+          },
+          machinery: '#FFD200',
+          /* Slight blue chroma toward brand hue, never pure black */
+          ink: '#091628',
+          /* Surface tints between blueprint-800 and blueprint-700,
+             named so they can be referenced consistently across components */
+          surface: {
+            50:  'var(--surface-50)',  /* bento-cell hover, diag-row hover */
+            100: 'var(--surface-100)',  /* bento-cell rest, id-card rest, diag-row rest */
+          },
+        },
+        fontFamily: {
+          display: ['Assistant', 'system-ui', 'sans-serif'],
+          mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+          sans: ['Assistant', 'system-ui', 'sans-serif'],
+        },
+        borderRadius: {
+          none: '0',
+        },
+      }
+    }
+  }
+</script>
+
+<style>
+  :root {
+    /* Surface tints between blueprint-800 (#102A43) and blueprint-700 (#173559),
+       paired with the Tailwind surface tokens for use in raw CSS. */
+    --surface-100: #0F2540;
+    --surface-50:  #112B49;
+    /* Motion curves:
+       --ease-mech for reveals (symmetric "machine drawing" feel)
+       --ease-out  for state transitions (quick start, slow finish, expo-out) */
+    --ease-mech: cubic-bezier(0.7, 0, 0.2, 1);
+    --ease-out:  cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  * { border-radius: 0 !important; }
+  html {
+    scroll-behavior: smooth;
+  }
+  /* Anchor targets account for the sticky header (~64px) so jumps land cleanly */
+  section[id], main { scroll-margin-top: 80px; }
+  html, body {
+    background: #102A43;
+    color: #E2EAF3;
+    font-family: 'Assistant', system-ui, sans-serif;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    background-image:
+      linear-gradient(rgba(127, 160, 201, 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(127, 160, 201, 0.08) 1px, transparent 1px),
+      linear-gradient(rgba(127, 160, 201, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(127, 160, 201, 0.04) 1px, transparent 1px);
+    background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
+  }
+  /* Mono for English labels. Per-glyph fallback to Assistant means Hebrew
+     characters (which JetBrains Mono lacks) render in Assistant while [01],
+     REV 2.6, etc. stay monospaced. */
+  .mono {
+    font-family: 'JetBrains Mono', 'Assistant', ui-monospace, monospace;
+  }
+  /* Hebrew body helper - Assistant medium */
+  .he {
+    font-family: 'Assistant', system-ui, sans-serif;
+    font-weight: 500;
+  }
+  /* Display headings - Assistant Extra-Bold */
+  .h-display {
+    font-family: 'Assistant', system-ui, sans-serif;
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+  }
+
+  /* ===== Custom crosshair cursor - opt-in via .has-crosshair on body =====
+     Only enabled on devices with fine pointers AND no reduced-motion preference.
+     Native cursor is preserved everywhere else. */
+  body.has-crosshair { cursor: none; }
+  body.has-crosshair a, body.has-crosshair button,
+  body.has-crosshair input, body.has-crosshair textarea, body.has-crosshair select { cursor: none; }
+
+  /* ===== Universal focus-visible - keyboard users see what's focused ===== */
+  *:focus { outline: none; }
+  a:focus-visible, button:focus-visible,
+  input:focus-visible, textarea:focus-visible, select:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid #FF6B00;
+    outline-offset: 3px;
+  }
+  .form-field:focus-visible {
+    outline: none;
+    border-bottom-color: #FF6B00;
+    box-shadow: 0 1px 0 0 #FF6B00;
+  }
+
+  /* ===== Reduced motion: kill animations, keep cursor visible ===== */
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    body.has-crosshair { cursor: auto; }
+    body.has-crosshair a, body.has-crosshair button,
+    body.has-crosshair input, body.has-crosshair textarea, body.has-crosshair select { cursor: auto; }
+    #crosshair { display: none !important; }
+    .flow-dash { animation: none !important; }
+    .typing-caret::after { animation: none !important; }
+    .reveal-line > * { transform: none !important; }
+    .draw-line, .draw-line-v { transform: scaleX(1) scaleY(1) !important; }
+    .stamp-in { opacity: 1 !important; transform: none !important; }
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /* Crosshair cursor */
+  .crosshair {
+    position: fixed;
+    top: 0; left: 0;
+    width: 60px; height: 60px;
+    pointer-events: none;
+    z-index: 9999;
+    transform: translate(-50%, -50%);
+    mix-blend-mode: difference;
+    will-change: transform;
+  }
+  .crosshair::before, .crosshair::after {
+    content: '';
+    position: absolute;
+    background: #FF6B00;
+  }
+  .crosshair::before {
+    top: 50%; left: 0; right: 0; height: 1px; transform: translateY(-50%);
+  }
+  .crosshair::after {
+    left: 50%; top: 0; bottom: 0; width: 1px; transform: translateX(-50%);
+  }
+  .crosshair .ring {
+    position: absolute; inset: 22px;
+    border: 1px solid #FF6B00;
+    transition: inset 0.2s var(--ease-out), border-color 0.2s var(--ease-out);
+  }
+  .crosshair.is-hover .ring {
+    inset: 4px;
+    border-color: #FFD200;
+  }
+  .crosshair .corner {
+    position: absolute;
+    width: 8px; height: 8px;
+    border-color: #FF6B00;
+    border-style: solid;
+    border-width: 0;
+  }
+  .crosshair .corner.tl { top: 0; left: 0; border-top-width: 1px; border-left-width: 1px;}
+  .crosshair .corner.tr { top: 0; right: 0; border-top-width: 1px; border-right-width: 1px;}
+  .crosshair .corner.bl { bottom: 0; left: 0; border-bottom-width: 1px; border-left-width: 1px;}
+  .crosshair .corner.br { bottom: 0; right: 0; border-bottom-width: 1px; border-right-width: 1px;}
+
+  /* Hide crosshair on touch / coarse-pointer devices and small screens */
+  @media (hover: none), (pointer: coarse), (max-width: 1024px) {
+    body.has-crosshair { cursor: auto; }
+    body.has-crosshair a, body.has-crosshair button,
+    body.has-crosshair input, body.has-crosshair textarea, body.has-crosshair select { cursor: auto; }
+    .crosshair { display: none; }
+  }
+
+  /* Technical Tag */
+  .tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: #7FA0C9;
+    text-transform: uppercase;
+  }
+  .tag-orange { color: #FF6B00; }
+
+  /* Section frame - simple 1px border, no decorative corner brackets */
+  .section-frame {
+    border: 1px solid rgba(127, 160, 201, 0.3);
+    position: relative;
+  }
+
+  /* Buttons */
+  .btn-industrial {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+    background: #FF6B00;
+    color: #091628;
+    font-family: 'Assistant', system-ui, sans-serif;
+    font-weight: 800;
+    font-size: 16px;
+    letter-spacing: 0.01em;
+    padding: 18px 32px;
+    border: 2px solid #FF6B00;
+    transition: transform 0.18s var(--ease-out), box-shadow 0.18s var(--ease-out), background 0.18s var(--ease-out);
+    box-shadow: 6px 6px 0 #091628;
+  }
+  .btn-industrial:hover { background: #FFD200; border-color: #FFD200; box-shadow: 4px 4px 0 #091628; }
+  .btn-industrial:active { transform: translate(4px, 4px); box-shadow: 0 0 0 #091628; }
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid #7FA0C9;
+    color: #B8CCE0;
+    padding: 14px 22px;
+    font-family: 'Assistant', system-ui, sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: 0.02em;
+    transition: border-color 0.18s var(--ease-out), color 0.18s var(--ease-out);
+  }
+  .btn-ghost:hover { border-color: #FF6B00; color: #FF6B00; }
+
+  /* Mechanical reveal */
+  .reveal-line {
+    position: relative;
+    overflow: hidden;
+  }
+  .reveal-line > * {
+    transform: translateY(110%);
+    display: inline-block;
+    transition: transform 0.7s var(--ease-mech);
+  }
+  .reveal-line.in-view > * { transform: translateY(0); }
+
+  .draw-line {
+    transform: scaleX(0);
+    transform-origin: right center;
+    transition: transform 1s var(--ease-mech);
+  }
+  .draw-line.in-view { transform: scaleX(1); }
+
+  .draw-line-v {
+    transform: scaleY(0);
+    transform-origin: top;
+    transition: transform 1s var(--ease-mech);
+  }
+  .draw-line-v.in-view { transform: scaleY(1); }
+
+  .stamp-in {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.5s var(--ease-out), transform 0.5s var(--ease-out);
+  }
+  .stamp-in.in-view {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Typing caret */
+  .typing-caret::after {
+    content: '_';
+    color: #FF6B00;
+    animation: blink 0.9s steps(1) infinite;
+    margin-inline-start: 2px;
+  }
+  @keyframes blink {
+    50% { opacity: 0; }
+  }
+
+  /* SVG schematic flow animation */
+  .flow-dash {
+    stroke-dasharray: 8 6;
+    animation: dashflow 2s linear infinite;
+  }
+  @keyframes dashflow {
+    to { stroke-dashoffset: -28; }
+  }
+
+  /* Bento cell */
+  .bento-cell {
+    position: relative;
+    border: 1px solid rgba(127, 160, 201, 0.3);
+    background:
+      radial-gradient(circle at top right, rgba(255, 107, 0, 0.04), transparent 40%),
+      var(--surface-100);
+    transition: border-color 0.2s var(--ease-out), background 0.2s var(--ease-out);
+  }
+  .bento-cell:hover {
+    border-color: #FF6B00;
+    background:
+      radial-gradient(circle at top right, rgba(255, 107, 0, 0.08), transparent 50%),
+      var(--surface-100);
+  }
+  .bento-cell .pin {
+    position: absolute;
+    width: 8px; height: 8px;
+    background: #FF6B00;
+  }
+  .bento-cell .pin.tl { top: 6px; right: 6px; }
+
+  /* Form */
+  .form-field {
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid rgba(127, 160, 201, 0.4);
+    color: #E2EAF3;
+    font-family: 'Assistant', system-ui, sans-serif;
+    font-size: 15px;
+    font-weight: 500;
+    padding: 14px 4px;
+    width: 100%;
+    text-align: right;
+    direction: rtl;
+    transition: border-color 0.18s var(--ease-out);
+  }
+  .form-field:focus {
+    outline: none;
+    border-bottom-color: #FF6B00;
+  }
+  .form-field::placeholder {
+    color: rgba(127, 160, 201, 0.5);
+    text-align: right;
+    direction: rtl;
+    font-family: 'Assistant', system-ui, sans-serif;
+  }
+  .form-field[type="email"], .form-field[type="url"], .form-field[type="tel"] {
+    font-family: 'JetBrains Mono', 'Assistant', monospace;
+    font-size: 14px;
+  }
+
+  /* Diagnostic row - full border, no side stripe.
+     Visual weight comes from the leading icon block + the ERR_NNN code. */
+  .diag-row {
+    border: 1px solid rgba(127, 160, 201, 0.3);
+    background: var(--surface-100);
+    transition: border-color 0.2s var(--ease-out), background 0.2s var(--ease-out);
+  }
+  .diag-row:hover {
+    border-color: rgba(255, 107, 0, 0.6);
+    background: var(--surface-50);
+  }
+  /* The icon block itself does the "alert" work - paint it solid orange on hover */
+  .diag-row .diag-icon {
+    background: rgba(255, 107, 0, 0.08);
+    transition: background 0.2s var(--ease-out);
+  }
+  .diag-row:hover .diag-icon { background: rgba(255, 107, 0, 0.18); }
+
+  /* Step node */
+  .step-node {
+    width: 56px; height: 56px;
+    border: 1px solid #FF6B00;
+    color: #FF6B00;
+    background: #102A43;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    position: relative;
+    z-index: 2;
+  }
+
+  /* ID card */
+  .id-card {
+    background:
+      repeating-linear-gradient(45deg, rgba(127,160,201,0.04) 0 2px, transparent 2px 6px),
+      var(--surface-100);
+    border: 1px solid rgba(127, 160, 201, 0.4);
+  }
+  .id-photo {
+    background:
+      linear-gradient(135deg, #173559, #2A5285);
+    border: 1px solid #FF6B00;
+    aspect-ratio: 3/4;
+    position: relative;
+    overflow: hidden;
+  }
+  .id-photo::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(127,160,201,0.2) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(127,160,201,0.2) 1px, transparent 1px);
+    background-size: 14px 14px;
+    z-index: 1;
+  }
+  .id-photo img { display: block; }
+  .id-photo.no-img img { display: none; }
+  .id-photo.no-img::after {
+    content: 'PORTRAIT_PENDING // your_photo.jpg';
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: #FF6B00;
+    text-align: center;
+    padding: 12px;
+    z-index: 5;
+  }
+  /* Logo wall - force every logo (dark OR light) to monochromatic white */
+  .logo-cell img {
+    max-height: 64px;
+    max-width: 80%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    /* brightness(0) -> pure black silhouette regardless of original color
+       invert(1)     -> flip to pure white silhouette
+       Result: every logo becomes a white silhouette, perfectly monochromatic. */
+    filter: brightness(0) invert(1);
+    opacity: 0.7;
+    transition: opacity 0.25s var(--ease-out), transform 0.25s var(--ease-out);
+  }
+  .logo-cell:hover img {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  .logo-cell.no-img img { display: none; }
+  .logo-cell.no-img::after {
+    content: attr(data-fallback);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #7FA0C9;
+    letter-spacing: 0.15em;
+    opacity: 0.6;
+  }
+
+  /* Dot grid */
+  .dotgrid {
+    background-image: radial-gradient(rgba(127,160,201,0.3) 1px, transparent 1px);
+    background-size: 10px 10px;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: #0A1F33; }
+  ::-webkit-scrollbar-thumb { background: #1E4072; border: 1px solid #FF6B00; }
+  ::-webkit-scrollbar-thumb:hover { background: #FF6B00; }
+
+  /* Selection */
+  ::selection { background: #FF6B00; color: #0A1622; }
+
+  /* Visually hidden but available to assistive tech */
+  .sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* Skip link */
+  .skip-link {
+    position: absolute;
+    top: -100px; left: 0;
+    background: #FF6B00;
+    color: #0A1622;
+    padding: 12px 20px;
+    z-index: 10000;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+  .skip-link:focus { top: 8px; left: 8px; }
+</style>
+</head>
+
+<body class="overflow-x-clip">
+
+<a href="#main" class="skip-link">SKIP TO CONTENT</a>
+
+<!-- CROSSHAIR CURSOR -->
+<div id="crosshair" class="crosshair" aria-hidden="true">
+  <span class="ring"></span>
+  <span class="corner tl"></span>
+  <span class="corner tr"></span>
+  <span class="corner bl"></span>
+  <span class="corner br"></span>
+</div>
+
+<!-- TOP BAR -->
+<header class="border-b border-blueprint-300/30 bg-blueprint-900/95 sticky top-0 z-40">
+  <div class="max-w-[1400px] mx-auto px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-4">
+      <div class="w-9 h-9 border border-safety flex items-center justify-center">
+        <div class="w-3 h-3 bg-safety"></div>
+      </div>
+      <div>
+        <div class="font-display text-base tracking-wider">DATA<span class="text-safety">.</span>ARCHITECT</div>
+        <div class="mono text-[9px] text-blueprint-300 tracking-[0.3em]">// ENG SPEC v2.0</div>
+      </div>
+    </div>
+    <nav class="hidden md:flex items-center gap-6 text-sm text-blueprint-200 he" aria-label="ניווט ראשי">
+      <a href="#failures" class="hover:text-safety transition-colors"><span class="mono text-blueprint-300">[01]</span> כשלים</a>
+      <a href="#specs" class="hover:text-safety transition-colors"><span class="mono text-blueprint-300">[02]</span> מפרט</a>
+      <a href="#process" class="hover:text-safety transition-colors"><span class="mono text-blueprint-300">[03]</span> תהליך</a>
+      <a href="#engineer" class="hover:text-safety transition-colors"><span class="mono text-blueprint-300">[04]</span> מהנדס</a>
+      <a href="#clients" class="hover:text-safety transition-colors"><span class="mono text-blueprint-300">[05]</span> לקוחות</a>
+      <a href="#order" class="hover:text-safety transition-colors"><span class="mono text-blueprint-300">[06]</span> צרו קשר</a>
+    </nav>
+    <a href="#order" class="hidden md:inline-flex btn-ghost"><span>תיאום בדיקה</span></a>
+    <button id="navToggle" type="button" class="md:hidden inline-flex items-center justify-center w-11 h-11 border border-blueprint-300/40 hover:border-safety transition-colors" aria-controls="mobileNav" aria-expanded="false" aria-label="פתיחת תפריט">
+      <span class="sr-only">תפריט</span>
+      <svg width="18" height="14" viewBox="0 0 18 14" aria-hidden="true">
+        <line x1="0" y1="1.5" x2="18" y2="1.5" stroke="#FF6B00" stroke-width="1.5"/>
+        <line x1="0" y1="7" x2="18" y2="7" stroke="#FF6B00" stroke-width="1.5"/>
+        <line x1="0" y1="12.5" x2="18" y2="12.5" stroke="#FF6B00" stroke-width="1.5"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Mobile drawer -->
+  <div id="mobileNav" class="md:hidden hidden border-t border-blueprint-300/30 bg-blueprint-900">
+    <nav class="px-6 py-5 flex flex-col gap-1 he text-base text-blueprint-100" aria-label="ניווט נייד">
+      <a href="#failures" class="flex items-center gap-3 py-3 border-b border-blueprint-300/10 hover:text-safety"><span class="mono text-[11px] text-blueprint-300 w-8">[01]</span> כשלים</a>
+      <a href="#specs" class="flex items-center gap-3 py-3 border-b border-blueprint-300/10 hover:text-safety"><span class="mono text-[11px] text-blueprint-300 w-8">[02]</span> מפרט</a>
+      <a href="#process" class="flex items-center gap-3 py-3 border-b border-blueprint-300/10 hover:text-safety"><span class="mono text-[11px] text-blueprint-300 w-8">[03]</span> תהליך</a>
+      <a href="#engineer" class="flex items-center gap-3 py-3 border-b border-blueprint-300/10 hover:text-safety"><span class="mono text-[11px] text-blueprint-300 w-8">[04]</span> מהנדס</a>
+      <a href="#clients" class="flex items-center gap-3 py-3 border-b border-blueprint-300/10 hover:text-safety"><span class="mono text-[11px] text-blueprint-300 w-8">[05]</span> לקוחות</a>
+      <a href="#order" class="flex items-center gap-3 py-3 hover:text-safety"><span class="mono text-[11px] text-blueprint-300 w-8">[06]</span> צרו קשר</a>
+      <a href="#order" class="btn-industrial mt-4 self-start"><span>תיאום בדיקה</span></a>
+    </nav>
+  </div>
+</header>
+
+<!-- ============================================ -->
+<!-- HERO -->
+<!-- ============================================ -->
+<main id="main">
+
+<section id="hero" class="relative">
+  <div class="max-w-[1400px] mx-auto px-6 pt-12 pb-20">
+    <div class="flex items-center justify-between mb-10">
+      <div class="tag tag-orange">FIG 01. HERO_SECTION / TRACKING_BLUEPRINT</div>
+      <div class="tag">REV 2.7 / 2026.05.11</div>
+    </div>
+
+    <div class="grid lg:grid-cols-12 gap-10 items-start">
+      <!-- LEFT (in RTL): Schematic SVG -->
+      <div class="lg:col-span-5 order-2">
+        <div class="section-frame p-6 relative bg-blueprint-900/40">
+          <div class="flex items-center justify-between mb-4 mono text-[10px] text-blueprint-300">
+            <span>DWG-001 / DATA_FLOW_SCHEMATIC</span>
+            <span class="text-safety">● LIVE</span>
+          </div>
+
+          <svg viewBox="0 0 480 296" class="w-full h-auto" aria-label="Data flow: browser through server-side GTM to Meta, Google, TikTok and CRM">
+            <defs>
+              <pattern id="grid-sm" width="20" height="20" patternUnits="userSpaceOnUse">
+                <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#7FA0C9" stroke-width="0.3" opacity="0.4"/>
+              </pattern>
+            </defs>
+            <rect width="480" height="296" fill="url(#grid-sm)"/>
+
+            <!-- Corner ticks -->
+            <g stroke="#FF6B00" stroke-width="1.2">
+              <path d="M 4 4 L 14 4 M 4 4 L 4 14"/>
+              <path d="M 476 4 L 466 4 M 476 4 L 476 14"/>
+              <path d="M 4 292 L 14 292 M 4 292 L 4 282"/>
+              <path d="M 476 292 L 466 292 M 476 292 L 476 282"/>
+            </g>
+
+            <!-- Browser node -->
+            <g>
+              <rect x="20" y="40" width="100" height="64" fill="var(--surface-100)" stroke="#7FA0C9" stroke-width="1"/>
+              <rect x="20" y="40" width="100" height="14" fill="#173559" stroke="#7FA0C9" stroke-width="1"/>
+              <circle cx="28" cy="47" r="2" fill="#FF6B00"/>
+              <circle cx="36" cy="47" r="2" fill="#FFD200"/>
+              <circle cx="44" cy="47" r="2" fill="#7FA0C9"/>
+              <text x="70" y="80" text-anchor="middle" fill="#E2EAF3" font-family="JetBrains Mono" font-size="11" font-weight="700">BROWSER</text>
+              <text x="70" y="95" text-anchor="middle" fill="#7FA0C9" font-family="JetBrains Mono" font-size="8">CLIENT_SIDE</text>
+            </g>
+
+            <!-- GTM node -->
+            <g>
+              <rect x="190" y="40" width="100" height="64" fill="var(--surface-100)" stroke="#FF6B00" stroke-width="1.5"/>
+              <text x="240" y="68" text-anchor="middle" fill="#FF6B00" font-family="JetBrains Mono" font-size="11" font-weight="700">GTM</text>
+              <text x="240" y="84" text-anchor="middle" fill="#E2EAF3" font-family="JetBrains Mono" font-size="9">SERVER-SIDE</text>
+              <text x="240" y="96" text-anchor="middle" fill="#7FA0C9" font-family="JetBrains Mono" font-size="8">PROXY_LAYER</text>
+            </g>
+
+            <!-- Server node -->
+            <g>
+              <rect x="360" y="40" width="100" height="64" fill="var(--surface-100)" stroke="#7FA0C9" stroke-width="1"/>
+              <text x="410" y="68" text-anchor="middle" fill="#E2EAF3" font-family="JetBrains Mono" font-size="11" font-weight="700">CLOUD</text>
+              <text x="410" y="84" text-anchor="middle" fill="#E2EAF3" font-family="JetBrains Mono" font-size="9">RUN</text>
+              <text x="410" y="96" text-anchor="middle" fill="#7FA0C9" font-family="JetBrains Mono" font-size="8">EDGE_NODE</text>
+            </g>
+
+            <!-- Connecting lines top row -->
+            <line x1="120" y1="72" x2="190" y2="72" stroke="#7FA0C9" stroke-width="1"/>
+            <line x1="290" y1="72" x2="360" y2="72" stroke="#7FA0C9" stroke-width="1"/>
+            <line x1="120" y1="72" x2="190" y2="72" stroke="#FF6B00" stroke-width="1.5" class="flow-dash"/>
+            <line x1="290" y1="72" x2="360" y2="72" stroke="#FF6B00" stroke-width="1.5" class="flow-dash"/>
+
+            <!-- Vertical connector -->
+            <line x1="240" y1="104" x2="240" y2="180" stroke="#7FA0C9" stroke-width="1"/>
+            <line x1="240" y1="104" x2="240" y2="180" stroke="#FF6B00" stroke-width="1.5" class="flow-dash"/>
+
+            <!-- Distribution bus -->
+            <line x1="48" y1="180" x2="432" y2="180" stroke="#7FA0C9" stroke-width="1"/>
+            <line x1="48" y1="180" x2="48" y2="220" stroke="#7FA0C9" stroke-width="1"/>
+            <line x1="176" y1="180" x2="176" y2="220" stroke="#7FA0C9" stroke-width="1"/>
+            <line x1="304" y1="180" x2="304" y2="220" stroke="#7FA0C9" stroke-width="1"/>
+            <line x1="432" y1="180" x2="432" y2="220" stroke="#7FA0C9" stroke-width="1"/>
+
+            <!-- Endpoint nodes (4) -->
+            <g>
+              <rect x="8" y="220" width="80" height="56" fill="#0A1F33" stroke="#7FA0C9" stroke-width="1"/>
+              <text x="48" y="244" text-anchor="middle" fill="#E2EAF3" font-family="JetBrains Mono" font-size="10" font-weight="700">META</text>
+              <text x="48" y="260" text-anchor="middle" fill="#7FA0C9" font-family="JetBrains Mono" font-size="8">CAPI</text>
+            </g>
+            <g>
+              <rect x="136" y="220" width="80" height="56" fill="#0A1F33" stroke="#7FA0C9" stroke-width="1"/>
+              <text x="176" y="244" text-anchor="middle" fill="#E2EAF3" font-family="JetBrains Mono" font-size="10" font-weight="700">GOOGLE</text>
+              <text x="176" y="260" text-anchor="middle" fill="#7FA0C9" font-family="JetBrains Mono" font-size="8">ADS_API</text>
+            </g>
+            <g>
+              <rect x="264" y="220" width="80" height="56" fill="#0A1F33" stroke="#FF6B00" stroke-width="1"/>
+              <text x="304" y="244" text-anchor="middle" fill="#E2EAF3" font-family="JetBrains Mono" font-size="10" font-weight="700">TIKTOK</text>
+              <text x="304" y="260" text-anchor="middle" fill="#FF6B00" font-family="JetBrains Mono" font-size="8">EVENTS_API</text>
+            </g>
+            <g>
+              <rect x="392" y="220" width="80" height="56" fill="#0A1F33" stroke="#7FA0C9" stroke-width="1"/>
+              <text x="432" y="244" text-anchor="middle" fill="#E2EAF3" font-family="JetBrains Mono" font-size="10" font-weight="700">CRM</text>
+              <text x="432" y="260" text-anchor="middle" fill="#7FA0C9" font-family="JetBrains Mono" font-size="8">OFFLINE</text>
+            </g>
+
+          </svg>
+
+          <div class="grid grid-cols-3 gap-3 mt-5 pt-4 border-t border-blueprint-300/20">
+            <div>
+              <div class="mono text-[9px] text-blueprint-300">MATCH_RATE</div>
+              <div class="font-display text-2xl text-safety">99.7<span class="text-base text-blueprint-200">%</span></div>
+            </div>
+            <div>
+              <div class="mono text-[9px] text-blueprint-300">EVENT_LOSS</div>
+              <div class="font-display text-2xl text-blueprint-100">&lt;0.3<span class="text-base text-blueprint-200">%</span></div>
+            </div>
+            <div>
+              <div class="mono text-[9px] text-blueprint-300">UPTIME</div>
+              <div class="font-display text-2xl text-blueprint-100">99.99<span class="text-base text-blueprint-200">%</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT (in RTL): Hero copy -->
+      <div class="lg:col-span-7 order-1 lg:pe-6">
+        <h1 class="h-display text-[clamp(2rem,4.6vw,4rem)] text-blueprint-100 font-extrabold">
+          <span class="reveal-line block"><span>הפייסבוק מדווח על X לידים,</span></span>
+          <span class="reveal-line block"><span class="text-safety">ה-CRM מראה Y?</span></span>
+          <span class="reveal-line block"><span>בואו נתקן את המדידה.</span></span>
+        </h1>
+
+        <p class="he text-[17px] leading-[1.75] text-blueprint-200 max-w-[640px] mt-8">
+          <span id="typed"></span><span class="typing-caret"></span>
+        </p>
+
+        <div class="mt-10 flex flex-wrap items-center gap-5">
+          <a href="#order" class="btn-industrial">
+            <span>בואו נבדוק את הדאטה שלכם</span>
+            <i data-lucide="arrow-left" class="w-5 h-5"></i>
+          </a>
+          <a href="#process" class="btn-ghost">
+            <span>איך זה נבנה</span>
+            <i data-lucide="chevron-down" class="w-4 h-4"></i>
+          </a>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</section>
+
+
+<!-- ============================================ -->
+<!-- SYSTEM FAILURES -->
+<!-- ============================================ -->
+<section id="failures" class="border-t border-blueprint-300/20 bg-blueprint-900/30">
+  <div class="max-w-[1400px] mx-auto px-6 py-24">
+    <div class="flex items-center justify-between mb-10">
+      <div class="tag tag-orange">FIG 02. DIAGNOSTIC_REPORT</div>
+      <div class="tag">SEVERITY: HIGH ▲</div>
+    </div>
+
+    <div class="grid lg:grid-cols-12 gap-10">
+      <div class="lg:col-span-5">
+        <h2 class="h-display text-[clamp(2rem,4vw,3.5rem)] text-blueprint-100 leading-tight font-extrabold">
+          איפה הכסף <br>
+          <span class="text-safety">בורח לכם</span> <br>
+          עכשיו?
+        </h2>
+        <p class="he text-base text-blueprint-200 mt-6 leading-relaxed max-w-md">
+          מערכות המדידה הסטנדרטיות כבר לא עומדות בקצב של עדכוני הפרטיות וחוסמי הפרסומות. התוצאה? אתם מקבלים החלטות על בסיס דאטה חסר.
+        </p>
+      </div>
+
+      <div class="lg:col-span-7 space-y-4">
+        <!-- Failure 01 -->
+        <div class="diag-row p-6 stamp-in">
+          <div class="flex items-start gap-5">
+            <div class="diag-icon w-12 h-12 border border-safety flex items-center justify-center flex-shrink-0">
+              <i data-lucide="alert-triangle" class="w-6 h-6 text-safety"></i>
+            </div>
+            <div class="flex-1">
+              <div class="flex items-baseline gap-3 mb-2">
+                <span class="mono text-[11px] text-safety tracking-widest">ERR_001</span>
+                <span class="mono text-[10px] text-blueprint-300">↳ DATA_DELTA</span>
+              </div>
+              <h3 class="font-display text-xl text-blueprint-100 font-extrabold">דאטה שנעלם</h3>
+              <p class="he text-[15px] text-blueprint-200 mt-2 leading-relaxed">
+                הלקוח קונה, אבל הפיקסל לא קולט כלום בגלל iOS 17 ו-AdBlockers. אתם מאבדים ארועים קריטיים.
+              </p>
+            </div>
+            <div class="text-end flex-shrink-0">
+              <div class="font-display text-3xl text-safety">30%+</div>
+              <div class="mono text-[10px] text-blueprint-300 tracking-widest">DISCREPANCY</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Failure 02 -->
+        <div class="diag-row p-6 stamp-in">
+          <div class="flex items-start gap-5">
+            <div class="diag-icon w-12 h-12 border border-safety flex items-center justify-center flex-shrink-0">
+              <i data-lucide="activity" class="w-6 h-6 text-safety"></i>
+            </div>
+            <div class="flex-1">
+              <div class="flex items-baseline gap-3 mb-2">
+                <span class="mono text-[11px] text-safety tracking-widest">ERR_002</span>
+                <span class="mono text-[10px] text-blueprint-300">↳ ALGO_BLINDNESS</span>
+              </div>
+              <h3 class="font-display text-xl text-blueprint-100 font-extrabold">קמפיינים שנתקעים</h3>
+              <p class="he text-[15px] text-blueprint-200 mt-2 leading-relaxed">
+                קהלי הרימרקטינג מתכווצים כי פייסבוק וטיקטוק פשוט עיוורים למה שקורה באתר.
+              </p>
+            </div>
+            <div class="text-end flex-shrink-0">
+              <div class="font-display text-3xl text-safety">x2.4</div>
+              <div class="mono text-[10px] text-blueprint-300 tracking-widest">CPA RISE</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Failure 03 -->
+        <div class="diag-row p-6 stamp-in">
+          <div class="flex items-start gap-5">
+            <div class="diag-icon w-12 h-12 border border-safety flex items-center justify-center flex-shrink-0">
+              <i data-lucide="unplug" class="w-6 h-6 text-safety"></i>
+            </div>
+            <div class="flex-1">
+              <div class="flex items-baseline gap-3 mb-2">
+                <span class="mono text-[11px] text-safety tracking-widest">ERR_003</span>
+                <span class="mono text-[10px] text-blueprint-300">↳ DECISION_FOG</span>
+              </div>
+              <h3 class="font-display text-xl text-blueprint-100 font-extrabold">זורקים כסף באפלה</h3>
+              <p class="he text-[15px] text-blueprint-200 mt-2 leading-relaxed">
+                נכנסות מכירות, אבל אין לכם מושג אמיתי איזה קמפיין או מודעה הביאו אותן.
+              </p>
+            </div>
+            <div class="text-end flex-shrink-0">
+              <div class="font-display text-3xl text-safety">∅</div>
+              <div class="mono text-[10px] text-blueprint-300 tracking-widest">CLARITY</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================ -->
+<!-- TECHNICAL SPECIFICATIONS - BENTO -->
+<!-- ============================================ -->
+<section id="specs" class="border-t border-blueprint-300/20">
+  <div class="max-w-[1400px] mx-auto px-6 py-24">
+    <div class="flex items-center justify-between mb-10">
+      <div class="tag tag-orange">FIG 03. TECHNICAL_SPECIFICATIONS</div>
+      <div class="tag">COMPONENT MATRIX 3x3</div>
+    </div>
+
+    <div class="grid lg:grid-cols-12 gap-6 mb-12 items-end">
+      <h2 class="lg:col-span-7 h-display text-[clamp(2rem,4vw,3.4rem)] text-blueprint-100 leading-tight font-extrabold">
+        הרכיבים שמרכיבים <br>
+        תשתית <span class="text-safety">שלא נשברת.</span>
+      </h2>
+      <p class="lg:col-span-5 he text-base text-blueprint-200 leading-relaxed">
+        כל מערכת בנויה ממודולים. אלה שלושת הליבות שעומדות מול עדכוני דפדפנים, חוסמי פרסומות ושינויי רגולציה - בלי שתצטרכו לתקן אותן כל חצי שנה.
+      </p>
+    </div>
+
+    <!-- Bento -->
+    <div class="grid grid-cols-1 md:grid-cols-6 gap-px bg-blueprint-300/20 border border-blueprint-300/20">
+
+      <!-- Cell 01: GTM Server -->
+      <div class="bento-cell md:col-span-4 p-8 lg:p-10 min-h-[360px] flex flex-col justify-between">
+        <span class="pin tl"></span>
+        <div>
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 border border-safety flex items-center justify-center">
+                <i data-lucide="server" class="w-5 h-5 text-safety"></i>
+              </div>
+              <div>
+                <div class="mono text-[10px] text-blueprint-300 tracking-widest">COMP-01 / CORE</div>
+                <div class="font-display text-2xl">GTM SERVER-SIDE</div>
+              </div>
+            </div>
+            <span class="mono text-[10px] text-safety border border-safety px-2 py-1">PRIMARY</span>
+          </div>
+
+          <p class="he text-[15px] text-blueprint-200 mt-6 leading-relaxed max-w-md">
+            איסוף הדאטה עובר מהדפדפן לשרת ייעודי בדומיין שלכם. ככה עוקפים חוסמי פרסומות, iOS 17 ומה שבדפדפן הבא ינסה לחסום, ושומרים על איכות אירועים גבוהה.
+          </p>
+        </div>
+        <div class="mt-8 grid grid-cols-3 gap-px bg-blueprint-300/30">
+          <div class="bg-blueprint-900/60 p-3"><div class="mono text-[9px] text-blueprint-300">UPTIME</div><div class="font-display text-lg">99.99%</div></div>
+          <div class="bg-blueprint-900/60 p-3"><div class="mono text-[9px] text-blueprint-300">LATENCY</div><div class="font-display text-lg">&lt;40ms</div></div>
+          <div class="bg-blueprint-900/60 p-3"><div class="mono text-[9px] text-blueprint-300">REGION</div><div class="font-display text-lg">EU/IL</div></div>
+        </div>
+      </div>
+
+      <!-- Cell 02: CAPI -->
+      <div class="bento-cell md:col-span-2 p-8 min-h-[360px] flex flex-col justify-between">
+        <span class="pin tl"></span>
+        <div>
+          <div class="w-10 h-10 border border-safety flex items-center justify-center">
+            <i data-lucide="git-merge" class="w-5 h-5 text-safety"></i>
+          </div>
+          <div class="mono text-[10px] text-blueprint-300 tracking-widest mt-5">COMP-02 / API</div>
+          <div class="font-display text-2xl mt-1">CAPI INTEGRATION</div>
+          <p class="he text-[15px] text-blueprint-200 mt-4 leading-relaxed">
+            חיבור ישיר ל-Conversions API של פייסבוק וגוגל. כל אירוע מגיע מהשרת - לא דרך הדפדפן.
+          </p>
+        </div>
+        <div class="mt-6 pt-4 border-t border-blueprint-300/20">
+          <div class="flex items-baseline justify-between">
+            <span class="mono text-[10px] text-blueprint-300">EVENT MATCH</span>
+            <span class="font-display text-2xl text-safety">9.8/10</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cell 03: Offline -->
+      <div class="bento-cell md:col-span-2 p-8 min-h-[260px] flex flex-col justify-between">
+        <span class="pin tl"></span>
+        <div>
+          <div class="w-10 h-10 border border-safety flex items-center justify-center">
+            <i data-lucide="repeat" class="w-5 h-5 text-safety"></i>
+          </div>
+          <div class="mono text-[10px] text-blueprint-300 tracking-widest mt-5">COMP-03 / LOOPBACK</div>
+          <div class="font-display text-2xl mt-1">OFFLINE TRACKING</div>
+          <p class="he text-[15px] text-blueprint-200 mt-4 leading-relaxed">
+            עסקה שנסגרה בטלפון או ב-CRM חוזרת למנהל המודעות. סוגר את המעגל.
+          </p>
+        </div>
+      </div>
+
+      <!-- Cell 04: Consent -->
+      <div class="bento-cell md:col-span-2 p-8 min-h-[260px] flex flex-col justify-between">
+        <span class="pin tl"></span>
+        <div>
+          <div class="w-10 h-10 border border-safety flex items-center justify-center">
+            <i data-lucide="shield-check" class="w-5 h-5 text-safety"></i>
+          </div>
+          <div class="mono text-[10px] text-blueprint-300 tracking-widest mt-5">COMP-04 / COMPLIANCE</div>
+          <div class="font-display text-2xl mt-1">CONSENT MODE V2</div>
+          <p class="he text-[15px] text-blueprint-200 mt-4 leading-relaxed">
+            תאימות ל-GDPR בלי לאבד דאטה. גוגל ממדל את האירועים שאסור למדוד.
+          </p>
+        </div>
+      </div>
+
+      <!-- Cell 05: BigQuery -->
+      <div class="bento-cell md:col-span-2 p-8 min-h-[260px] flex flex-col justify-between">
+        <span class="pin tl"></span>
+        <div>
+          <div class="w-10 h-10 border border-safety flex items-center justify-center">
+            <i data-lucide="database" class="w-5 h-5 text-safety"></i>
+          </div>
+          <div class="mono text-[10px] text-blueprint-300 tracking-widest mt-5">COMP-05 / WAREHOUSE</div>
+          <div class="font-display text-2xl mt-1">GA4 → BIGQUERY</div>
+          <p class="he text-[15px] text-blueprint-200 mt-4 leading-relaxed">
+            כל אירוע גולמי נשמר אצלכם. שואלים שאלות שגוגל לא נותן לכם לשאול בממשק.
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================ -->
+<!-- PROCESS - ASSEMBLY LINE -->
+<!-- ============================================ -->
+<section id="process" class="border-t border-blueprint-300/20 bg-blueprint-900/40">
+  <div class="max-w-[1400px] mx-auto px-6 py-24">
+    <div class="flex items-center justify-between mb-10">
+      <div class="tag tag-orange">FIG 04. ASSEMBLY_LINE / DEPLOYMENT_PROTOCOL</div>
+      <div class="tag">DURATION: 14–21 DAYS</div>
+    </div>
+
+    <div class="mb-16 max-w-3xl">
+      <h2 class="h-display text-[clamp(2rem,4vw,3.4rem)] text-blueprint-100 leading-tight font-extrabold">
+        איך זה עובד בפועל. <br>
+        <span class="text-safety">שלושה שלבים, בלי הפתעות.</span>
+      </h2>
+    </div>
+
+    <!-- Assembly line -->
+    <div class="relative">
+      <!-- Desktop: horizontal connector through node centers -->
+      <div class="hidden md:block absolute top-7 right-[8%] left-[8%] h-px bg-blueprint-300/40" aria-hidden="true"></div>
+      <div class="hidden md:block absolute top-7 right-[8%] left-[8%] h-px draw-line bg-safety" aria-hidden="true"></div>
+      <!-- Mobile: vertical connector through stacked node centers -->
+      <div class="md:hidden absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-blueprint-300/40" aria-hidden="true"></div>
+      <div class="md:hidden absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px draw-line-v bg-safety" aria-hidden="true"></div>
+
+      <div class="grid md:grid-cols-3 gap-8 md:gap-4 relative">
+        <!-- Step 01 -->
+        <div class="text-center px-2">
+          <div class="step-node mx-auto mb-6">01</div>
+          <div class="border border-blueprint-300/30 bg-blueprint-800 p-6 text-start relative">
+            <span class="pin absolute top-2 right-2 w-2 h-2 bg-safety"></span>
+            <div class="mono text-[10px] text-safety tracking-widest mb-2">PHASE_A</div>
+            <h3 class="font-display text-xl text-blueprint-100 mb-3 font-extrabold">AUDIT // מיפוי</h3>
+            <p class="he text-[15px] text-blueprint-200 leading-relaxed">
+              נכנסים למערכות שלכם, בודקים מה עובד ומה לא. מאתרים איפה הדאטה דולף ומה לא מתחבר ל-CRM.
+            </p>
+            <ul class="he text-[13px] text-blueprint-300 mt-5 space-y-1.5">
+              <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 bg-safety"></span> Tracking Plan ייעודי</li>
+              <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 bg-safety"></span> השוואה בין CRM למודעות</li>
+              <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 bg-safety"></span> דוח עם כל הכשלים</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Step 02 -->
+        <div class="text-center px-2">
+          <div class="step-node mx-auto mb-6">02</div>
+          <div class="border border-blueprint-300/30 bg-blueprint-800 p-6 text-start relative">
+            <span class="pin absolute top-2 right-2 w-2 h-2 bg-safety"></span>
+            <div class="mono text-[10px] text-safety tracking-widest mb-2">PHASE_B</div>
+            <h3 class="font-display text-xl text-blueprint-100 mb-3 font-extrabold">IMPLEMENTATION // בנייה</h3>
+            <p class="he text-[15px] text-blueprint-200 leading-relaxed">
+              מקים את התשתית - Server-Side GTM, CAPI לפייסבוק וגוגל, Enhanced Conversions ו-Consent Mode. קוד שאפשר לתחזק.
+            </p>
+            <ul class="he text-[13px] text-blueprint-300 mt-5 space-y-1.5">
+              <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 bg-safety"></span> sGTM על Cloud Run</li>
+              <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 bg-safety"></span> Meta + Google CAPI</li>
+              <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 bg-safety"></span> סאב-דומיין משלכם</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Step 03 -->
+        <div class="text-center px-2">
+          <div class="step-node mx-auto mb-6">03</div>
+          <div class="border border-blueprint-300/30 bg-blueprint-800 p-6 text-start relative">
+            <span class="pin absolute top-2 right-2 w-2 h-2 bg-safety"></span>
+            <div class="mono text-[10px] text-safety tracking-widest mb-2">PHASE_C</div>
+            <h3 class="font-display text-xl text-blueprint-100 mb-3 font-extrabold">VALIDATION // בדיקות</h3>
+            <p class="he text-[15px] text-blueprint-200 leading-relaxed">
+              משווים מספרים מול ה-CRM שלכם, מוודאים שהכל מדויק. מקבלים דשבורד למעקב והדרכה לצוות.
+            </p>
+            <ul class="he text-[13px] text-blueprint-300 mt-5 space-y-1.5">
+              <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 bg-safety"></span> QA על כל הדפדפנים</li>
+              <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 bg-safety"></span> דשבורד ב-Looker Studio</li>
+              <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 bg-safety"></span> תיעוד מלא + מסירה</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Specs row below -->
+    <div class="mt-14 grid grid-cols-1 md:grid-cols-3 gap-px bg-blueprint-300/20 border border-blueprint-300/20">
+      <div class="bg-blueprint-800 p-6 flex items-center gap-4">
+        <i data-lucide="clock" class="w-5 h-5 text-safety"></i>
+        <div>
+          <div class="mono text-[10px] text-blueprint-300 tracking-widest">TIMELINE</div>
+          <div class="font-display text-xl">14–21 ימים</div>
+        </div>
+      </div>
+      <div class="bg-blueprint-800 p-6 flex items-center gap-4">
+        <i data-lucide="users" class="w-5 h-5 text-safety"></i>
+        <div>
+          <div class="mono text-[10px] text-blueprint-300 tracking-widest">INVOLVEMENT</div>
+          <div class="font-display text-xl">2–3 שעות בלבד</div>
+        </div>
+      </div>
+      <div class="bg-blueprint-800 p-6 flex items-center gap-4">
+        <i data-lucide="file-check-2" class="w-5 h-5 text-safety"></i>
+        <div>
+          <div class="mono text-[10px] text-blueprint-300 tracking-widest">DELIVERABLES</div>
+          <div class="font-display text-xl">קוד + תיעוד + דשבורד</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================ -->
+<!-- LEAD ENGINEER -->
+<!-- ============================================ -->
+<section id="engineer" class="border-t border-blueprint-300/20">
+  <div class="max-w-[1400px] mx-auto px-6 py-24">
+    <div class="flex items-center justify-between mb-10">
+      <div class="tag tag-orange">FIG 05. PERSONNEL_FILE</div>
+      <div class="tag">CLEARANCE: LEVEL_03</div>
+    </div>
+
+    <div class="grid lg:grid-cols-12 gap-10 items-start">
+      <!-- ID Card -->
+      <div class="lg:col-span-5">
+        <div class="id-card p-6 relative">
+          <div class="flex items-center justify-between border-b border-blueprint-300/30 pb-3 mb-5">
+            <div class="flex items-center gap-2">
+              <div class="w-2 h-2 bg-safety"></div>
+              <span class="mono text-[10px] tracking-widest text-blueprint-200">DATA.ARCHITECT // ID-2401</span>
+            </div>
+            <span class="mono text-[10px] text-safety">● ACTIVE</span>
+          </div>
+
+          <div class="grid grid-cols-12 gap-5">
+            <div class="col-span-5 id-photo">
+              <img src="your_photo.jpg" alt="Sivan Berger, Lead Tracking Engineer" loading="lazy" decoding="async" class="absolute inset-0 w-full h-full object-cover grayscale contrast-110 z-10" />
+              <div class="absolute inset-0 ring-1 ring-safety z-20 pointer-events-none"></div>
+              <div class="absolute top-2 left-2 z-20 mono text-[8px] text-safety bg-blueprint-900/70 px-1.5 py-0.5">ID-2401</div>
+              <div class="absolute bottom-2 right-2 z-20 mono text-[8px] text-safety">● REC</div>
+            </div>
+            <div class="col-span-7 space-y-3 text-xs">
+              <div>
+                <div class="text-blueprint-300 text-[10px] tracking-widest mono">NAME</div>
+                <div class="text-blueprint-100 font-bold text-sm he">סיון ברגר <span class="text-blueprint-300 mono font-normal">/ Sivan Berger</span></div>
+              </div>
+              <div>
+                <div class="text-blueprint-300 text-[10px] tracking-widest mono">ROLE</div>
+                <div class="text-blueprint-100 font-bold text-sm mono">LEAD TRACKING ENGINEER</div>
+              </div>
+              <div>
+                <div class="text-blueprint-300 text-[10px] tracking-widest mono">EXPERIENCE</div>
+                <div class="text-blueprint-100 font-bold text-sm mono">11 YR / 120+ DEPLOYMENTS</div>
+              </div>
+              <div>
+                <div class="text-blueprint-300 text-[10px] tracking-widest mono">CERTS</div>
+                <div class="text-blueprint-100 text-sm mono">Google Analytics · Meta Marketing · GCP</div>
+              </div>
+              <div>
+                <div class="text-blueprint-300 text-[10px] tracking-widest mono">LOCATION</div>
+                <div class="text-blueprint-100 font-bold text-sm mono">TEL AVIV / REMOTE</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ID footer -->
+          <div class="mt-6 pt-4 border-t border-blueprint-300/30 mono text-[10px] text-blueprint-300 text-end">
+            // ID-2401-SB-IL
+          </div>
+        </div>
+      </div>
+
+      <!-- Statement -->
+      <div class="lg:col-span-7">
+        <h2 class="h-display text-[clamp(1.8rem,3.2vw,2.6rem)] text-blueprint-100 leading-tight mb-8 font-extrabold">
+          "אני לא סוכנות שיווק. <br>
+          אני <span class="text-safety">איש טכני.</span>"
+        </h2>
+
+        <figure class="relative mb-8 py-6 border-y border-blueprint-300/40">
+          <span class="absolute -top-3 right-0 mono text-[10px] tracking-widest text-safety bg-blueprint-800 px-2">// EXCERPT</span>
+          <blockquote class="he text-[17px] text-blueprint-100 leading-loose">
+            היי, אני סיון. בניגוד לסוכנויות שמבטיחות הרים וגבעות, אני מתעסק רק בדבר אחד: <span class="text-safety">התשתית הטכנית.</span> אני בונה מערכות נתונים לעסקים שצריכים להפסיק לנחש ולהתחיל לדעת בוודאות איפה לשים את התקציב שלהם. נטו קוד ודאטה, בלי בולשיט.
+          </blockquote>
+        </figure>
+
+        <div class="grid grid-cols-2 gap-px bg-blueprint-300/20 border border-blueprint-300/20">
+          <div class="bg-blueprint-800 p-5">
+            <div class="mono text-[10px] text-blueprint-300 tracking-widest">ENGAGEMENTS</div>
+            <div class="font-display text-3xl mt-2 text-safety">PROVEN</div>
+            <div class="he text-[12px] text-blueprint-300 mt-1">פרויקטים שהושלמו</div>
+          </div>
+          <div class="bg-blueprint-800 p-5">
+            <div class="mono text-[10px] text-blueprint-300 tracking-widest">INDUSTRIES</div>
+            <div class="font-display text-3xl mt-2">17</div>
+            <div class="he text-[12px] text-blueprint-300 mt-1">תחומים: SaaS, איקומרס, פיננסים</div>
+          </div>
+          <div class="bg-blueprint-800 p-5">
+            <div class="mono text-[10px] text-blueprint-300 tracking-widest">RETENTION</div>
+            <div class="font-display text-3xl mt-2">94<span class="text-safety">%</span></div>
+            <div class="he text-[12px] text-blueprint-300 mt-1">לקוחות חוזרים</div>
+          </div>
+          <div class="bg-blueprint-800 p-5">
+            <div class="mono text-[10px] text-blueprint-300 tracking-widest">RESPONSE</div>
+            <div class="font-display text-3xl mt-2">&lt;4h</div>
+            <div class="he text-[12px] text-blueprint-300 mt-1">זמן מענה ממוצע</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================ -->
+<!-- COLLABORATION LOG / CLIENTS -->
+<!-- ============================================ -->
+<section id="clients" class="border-t border-blueprint-300/20">
+  <div class="max-w-[1400px] mx-auto px-6 py-20">
+    <div class="flex items-center justify-between mb-10">
+      <div class="tag tag-orange">FIG 05B. COLLABORATION_LOG</div>
+      <div class="tag">RECORDS: ON-FILE</div>
+    </div>
+
+    <div class="grid lg:grid-cols-12 gap-8 items-end mb-10">
+      <div class="lg:col-span-7">
+        <h2 class="h-display text-[clamp(1.8rem,3.4vw,2.8rem)] text-blueprint-100 leading-tight font-extrabold">
+          חברות שעבדתי <br>
+          <span class="text-safety">איתן לאורך הדרך.</span>
+        </h2>
+      </div>
+      <div class="lg:col-span-5 mono text-[11px] text-blueprint-300 leading-relaxed">
+        <span class="text-safety">//</span> חתך של עסקים שבחרו לבנות תשתית מדידה אמיתית. SaaS, איקומרס, פיננסים, ומותגים בינלאומיים.
+      </div>
+    </div>
+
+    <!-- Logo wall -->
+    <div class="border border-blueprint-300/30 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 divide-x divide-y divide-blueprint-300/20">
+      <div class="logo-cell aspect-[3/2] flex items-center justify-center p-6 bg-blueprint-900/40 hover:bg-blueprint-900/70 transition-colors" data-fallback="LOGO_01">
+        <img src="logo_1.png" alt="Client 01" loading="lazy" decoding="async" />
+      </div>
+      <div class="logo-cell aspect-[3/2] flex items-center justify-center p-6 bg-blueprint-900/40 hover:bg-blueprint-900/70 transition-colors" data-fallback="LOGO_02">
+        <img src="logo_2.png" alt="Client 02" loading="lazy" decoding="async" />
+      </div>
+      <div class="logo-cell aspect-[3/2] flex items-center justify-center p-6 bg-blueprint-900/40 hover:bg-blueprint-900/70 transition-colors" data-fallback="LOGO_03">
+        <img src="logo_3.png" alt="Client 03" loading="lazy" decoding="async" />
+      </div>
+      <div class="logo-cell aspect-[3/2] flex items-center justify-center p-6 bg-blueprint-900/40 hover:bg-blueprint-900/70 transition-colors" data-fallback="LOGO_04">
+        <img src="logo_4.png" alt="Client 04" loading="lazy" decoding="async" />
+      </div>
+      <div class="logo-cell aspect-[3/2] flex items-center justify-center p-6 bg-blueprint-900/40 hover:bg-blueprint-900/70 transition-colors" data-fallback="LOGO_05">
+        <img src="logo_5.png" alt="Client 05" loading="lazy" decoding="async" />
+      </div>
+      <div class="logo-cell aspect-[3/2] flex items-center justify-center p-6 bg-blueprint-900/40 hover:bg-blueprint-900/70 transition-colors" data-fallback="LOGO_06">
+        <img src="logo_6.png" alt="Client 06" loading="lazy" decoding="async" />
+      </div>
+    </div>
+
+    <!-- NDA disclaimer -->
+    <div class="mt-4 mono text-[10px] text-blueprint-300 tracking-widest">
+      <span class="text-safety">[</span> CONFIDENTIAL <span class="text-safety">]</span> NDA-PROTECTED ENGAGEMENTS NOT LISTED
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================ -->
+<!-- ORDER FORM -->
+<!-- ============================================ -->
+<section id="order" class="border-t border-blueprint-300/20 bg-blueprint-900/50">
+  <div class="max-w-[1400px] mx-auto px-6 py-24">
+    <div class="flex items-center justify-between mb-10">
+      <div class="tag tag-orange">FIG 06. ORDER_SPECIFICATION</div>
+      <div class="tag">FORM ID: ORD-2026-Q2</div>
+    </div>
+
+    <div class="grid lg:grid-cols-12 gap-10 items-start">
+      <div class="lg:col-span-5">
+        <h2 class="h-display text-[clamp(2rem,4vw,3.4rem)] text-blueprint-100 leading-tight mb-6 font-extrabold">
+          בואו נבדוק מה <br>
+          <span class="text-safety">מצב המדידה שלכם.</span>
+        </h2>
+        <p class="he text-base text-blueprint-200 leading-relaxed mb-8 max-w-md">
+          השאירו פרטים לשיחת היכרות קצרה. נציץ במערכות, נבין איפה הדאטה דולף, ונראה אם אני יכול לעזור.
+        </p>
+
+        <ul class="space-y-3 he text-[15px] text-blueprint-100">
+          <li class="flex items-center gap-3 border border-blueprint-300/20 p-3">
+            <i data-lucide="check-square" class="w-4 h-4 text-safety flex-shrink-0"></i>
+            סקירה טכנית של ה-GTM שלכם
+          </li>
+          <li class="flex items-center gap-3 border border-blueprint-300/20 p-3">
+            <i data-lucide="check-square" class="w-4 h-4 text-safety flex-shrink-0"></i>
+            השוואת match rate מול הסטנדרט
+          </li>
+          <li class="flex items-center gap-3 border border-blueprint-300/20 p-3">
+            <i data-lucide="check-square" class="w-4 h-4 text-safety flex-shrink-0"></i>
+            הערכה ראשונית של פוטנציאל ROAS
+          </li>
+        </ul>
+      </div>
+
+      <!-- Form -->
+      <div class="lg:col-span-7">
+        <form id="orderForm" class="border border-blueprint-300/30 bg-blueprint-800 p-8 lg:p-10 relative">
+          <!-- Form header -->
+          <div class="flex items-center justify-between border-b border-blueprint-300/30 pb-4 mb-6">
+            <div class="flex items-center gap-3">
+              <div class="w-3 h-3 bg-safety"></div>
+              <div class="mono text-xs text-blueprint-100 tracking-widest">PROJECT BRIEF / FORM-2026.04</div>
+            </div>
+            <div class="mono text-[10px] text-blueprint-300">PG. 01 / 01</div>
+          </div>
+
+          <div class="grid sm:grid-cols-2 gap-x-8 gap-y-6">
+            <div>
+              <label for="f-name" class="mono text-[11px] tracking-widest text-blueprint-300 block mb-1"><span aria-hidden="true">[01]</span> שם מלא <span class="text-safety" aria-label="שדה חובה">*</span></label>
+              <input id="f-name" name="name" type="text" required dir="rtl" autocomplete="name" class="form-field" placeholder="ישראל ישראלי">
+            </div>
+            <div>
+              <label for="f-phone" class="mono text-[11px] tracking-widest text-blueprint-300 block mb-1"><span aria-hidden="true">[02]</span> טלפון <span class="text-safety" aria-label="שדה חובה">*</span></label>
+              <input id="f-phone" name="phone" type="tel" required dir="rtl" autocomplete="tel" class="form-field" placeholder="050-0000000">
+            </div>
+            <div>
+              <label for="f-email" class="mono text-[11px] tracking-widest text-blueprint-300 block mb-1"><span aria-hidden="true">[03]</span> אימייל <span class="text-safety" aria-label="שדה חובה">*</span></label>
+              <input id="f-email" name="email" type="email" required dir="rtl" autocomplete="email" class="form-field" placeholder="name@company.com">
+            </div>
+            <div>
+              <label for="f-domain" class="mono text-[11px] tracking-widest text-blueprint-300 block mb-1"><span aria-hidden="true">[04]</span> דומיין האתר <span class="text-safety" aria-label="שדה חובה">*</span></label>
+              <input id="f-domain" name="domain" type="url" required dir="rtl" autocomplete="url" class="form-field" placeholder="https://yourdomain.co.il">
+            </div>
+            <div class="sm:col-span-2">
+              <label for="f-budget" class="mono text-[11px] tracking-widest text-blueprint-300 block mb-1"><span aria-hidden="true">[05]</span> תקציב חודשי בפרסום <span class="text-blueprint-400">(אופציונלי)</span></label>
+              <select id="f-budget" name="budget" dir="rtl" class="form-field">
+                <option value="" disabled selected hidden>אנא בחרו טווח</option>
+                <option value="lt-10k" class="bg-blueprint-800">עד 10,000 ₪</option>
+                <option value="10k-50k" class="bg-blueprint-800">10,000–50,000 ₪</option>
+                <option value="50k-200k" class="bg-blueprint-800">50,000–200,000 ₪</option>
+                <option value="gt-200k" class="bg-blueprint-800">200,000+ ₪</option>
+              </select>
+            </div>
+            <div class="sm:col-span-2">
+              <label for="f-issue" class="mono text-[11px] tracking-widest text-blueprint-300 block mb-1"><span aria-hidden="true">[06]</span> תיאור קצר של הבעיה <span class="text-blueprint-400">(אופציונלי)</span></label>
+              <textarea id="f-issue" name="issue" dir="rtl" class="form-field h-20 resize-none" placeholder="מה לא עובד היום במערכת המדידה..."></textarea>
+            </div>
+          </div>
+
+          <!-- Submit -->
+          <div class="mt-8 pt-6 border-t border-blueprint-300/30 flex justify-end">
+            <button type="submit" class="btn-industrial">
+              <span>בואו נדבר</span>
+              <i data-lucide="arrow-left" class="w-5 h-5"></i>
+            </button>
+          </div>
+        </form>
+
+        <div id="formSuccess" class="hidden mt-6 border border-safety bg-safety/10 p-5 he text-base text-blueprint-100">
+          <span class="text-safety mono">[OK]</span> קיבלתי את הפרטים. אחזור אליכם תוך 24 שעות.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+</main>
+
+<!-- ============================================ -->
+<!-- FOOTER -->
+<!-- ============================================ -->
+<footer class="border-t border-blueprint-300/30 bg-blueprint-900">
+  <div class="max-w-[1400px] mx-auto px-6 py-10 grid md:grid-cols-3 gap-6 items-center">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 border border-safety flex items-center justify-center">
+        <div class="w-2.5 h-2.5 bg-safety"></div>
+      </div>
+      <div>
+        <div class="font-display text-sm tracking-wider">DATA<span class="text-safety">.</span>ARCHITECT</div>
+        <div class="mono text-[9px] text-blueprint-300 tracking-widest">// ENGINEERED MEASUREMENT</div>
+      </div>
+    </div>
+    <div class="mono text-[10px] text-blueprint-300 text-center">
+      © 2026 / DATA.ARCHITECT // ALL DATA STREAMS RESERVED
+    </div>
+    <div class="mono text-[10px] text-blueprint-300 md:text-end">
+      DRAWN BY: S.B // CHECKED: SYSTEM // REV 2.7
+    </div>
+  </div>
+</footer>
+
+
+<script>
+  // ===== Lucide icons =====
+  lucide.createIcons();
+
+  // ===== Crosshair cursor - gated on capability + motion preference =====
+  // Enable only on devices with fine pointers, hover, and no reduced-motion.
+  const supportsCrosshair =
+    window.matchMedia('(hover: hover) and (pointer: fine)').matches &&
+    !window.matchMedia('(prefers-reduced-motion: reduce)').matches &&
+    window.innerWidth > 1024;
+
+  const ch = document.getElementById('crosshair');
+  if (supportsCrosshair) {
+    document.body.classList.add('has-crosshair');
+    let mx = window.innerWidth / 2, my = window.innerHeight / 2;
+    let cx = mx, cy = my;
+    let active = false;
+
+    document.addEventListener('mousemove', e => {
+      mx = e.clientX; my = e.clientY;
+      if (!active) { active = true; requestAnimationFrame(loop); }
+    });
+    function loop() {
+      cx += (mx - cx) * 0.35;
+      cy += (my - cy) * 0.35;
+      ch.style.transform = `translate(${cx}px, ${cy}px) translate(-50%, -50%)`;
+      if (Math.abs(mx - cx) < 0.1 && Math.abs(my - cy) < 0.1) {
+        active = false; return;
+      }
+      requestAnimationFrame(loop);
+    }
+
+    // Hover affordance on interactives
+    document.querySelectorAll('a, button, input, textarea, select, .bento-cell, .diag-row, .step-node, .logo-cell').forEach(el => {
+      el.addEventListener('mouseenter', () => ch.classList.add('is-hover'));
+      el.addEventListener('mouseleave', () => ch.classList.remove('is-hover'));
+    });
+  } else if (ch) {
+    ch.style.display = 'none';
+  }
+
+  // ===== Mobile nav toggle + focus trap =====
+  const navToggle = document.getElementById('navToggle');
+  const mobileNav = document.getElementById('mobileNav');
+  if (navToggle && mobileNav) {
+    const focusables = () => Array.from(
+      mobileNav.querySelectorAll('a, button, [tabindex]:not([tabindex="-1"])')
+    ).filter(el => !el.hasAttribute('disabled'));
+
+    const openMenu = () => {
+      mobileNav.classList.remove('hidden');
+      navToggle.setAttribute('aria-expanded', 'true');
+      navToggle.setAttribute('aria-label', 'סגירת תפריט');
+      // Move focus into the drawer for keyboard users
+      const first = focusables()[0];
+      if (first) first.focus();
+    };
+    const closeMenu = (returnFocus = true) => {
+      mobileNav.classList.add('hidden');
+      navToggle.setAttribute('aria-expanded', 'false');
+      navToggle.setAttribute('aria-label', 'פתיחת תפריט');
+      if (returnFocus) navToggle.focus();
+    };
+
+    navToggle.addEventListener('click', () => {
+      if (mobileNav.classList.contains('hidden')) openMenu();
+      else closeMenu(false);
+    });
+
+    // Close on link click (no focus return since user is navigating)
+    mobileNav.querySelectorAll('a').forEach(a => {
+      a.addEventListener('click', () => closeMenu(false));
+    });
+
+    // Focus trap: Tab cycles within the drawer; Escape closes
+    document.addEventListener('keydown', e => {
+      if (mobileNav.classList.contains('hidden')) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeMenu(true);
+        return;
+      }
+      if (e.key === 'Tab') {
+        const items = focusables();
+        if (items.length === 0) return;
+        const first = items[0];
+        const last  = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault(); last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault(); first.focus();
+        }
+      }
+    });
+  }
+
+  // ===== Typing effect - skip and show full text if reduced-motion is set =====
+  const typedEl = document.getElementById('typed');
+  const fullText = 'בלי סיפורים ובלי "האלגוריתם לומד". בניית תשתיות Tracking, Server Side ו-CAPI שיציגו לכם תכלס מאיזה קמפיין מגיע הכסף, ויעקפו את חוסמי הפרסומות.';
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    typedEl.textContent = fullText;
+    document.querySelectorAll('.typing-caret').forEach(c => c.classList.remove('typing-caret'));
+  } else {
+    let i = 0;
+    function typeStep() {
+      if (i <= fullText.length) {
+        typedEl.textContent = fullText.slice(0, i);
+        i++;
+        setTimeout(typeStep, 22);
+      }
+    }
+    setTimeout(typeStep, 600);
+  }
+
+  // ===== Mechanical reveal on scroll =====
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((e, idx) => {
+      if (e.isIntersecting) {
+        // Stagger
+        setTimeout(() => e.target.classList.add('in-view'), idx * 80);
+        io.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.15 });
+
+  document.querySelectorAll('.reveal-line, .draw-line, .draw-line-v, .stamp-in').forEach(el => io.observe(el));
+
+  // Trigger hero reveal lines on load
+  setTimeout(() => {
+    document.querySelectorAll('#hero .reveal-line').forEach((el, i) => {
+      setTimeout(() => el.classList.add('in-view'), i * 120);
+    });
+  }, 200);
+
+  // ===== Form handler =====
+  const form = document.getElementById('orderForm');
+  const success = document.getElementById('formSuccess');
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    form.style.display = 'none';
+    success.classList.remove('hidden');
+    success.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+
+  // ===== Image fallback handlers (missing portrait / logos) =====
+  document.querySelectorAll('.logo-cell img').forEach(img => {
+    img.addEventListener('error', () => img.parentElement.classList.add('no-img'));
+    if (img.complete && img.naturalWidth === 0) img.parentElement.classList.add('no-img');
+  });
+  const portrait = document.querySelector('.id-photo img');
+  if (portrait) {
+    portrait.addEventListener('error', () => portrait.parentElement.classList.add('no-img'));
+    if (portrait.complete && portrait.naturalWidth === 0) portrait.parentElement.classList.add('no-img');
+  }
+
+  // ===== Smooth anchor scroll =====
+  document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', e => {
+      const id = a.getAttribute('href');
+      if (id.length > 1) {
+        const t = document.querySelector(id);
+        if (t) {
+          e.preventDefault();
+          t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }
+    });
+  });
+</script>
+
+</body>
+</html>
